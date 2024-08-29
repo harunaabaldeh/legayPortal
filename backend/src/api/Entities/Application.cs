@@ -10,4 +10,6 @@ public class Application
     public DateTime UpdatedAt { get; set; }
     public Guid JobId { get; set; }
     public Job Job { get; set; }
+    public string UserId { get; set; }
+    public AppUser AppUser { get; set; }
 }

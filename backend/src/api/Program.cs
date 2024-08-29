@@ -1,3 +1,5 @@
+using api.Common.Interfaces;
+using api.Common.Services;
 using api.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -5,12 +7,22 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<LegayPortalContext>(x =>
 {
-    x.UseSqlite(connectionString);
+    x.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
+builder.Services.AddCors(o =>
+{
+    o.AddPolicy("CorsPolicy", builder =>
+    {
+        builder.AllowAnyOrigin()
+        .AllowAnyMethod()
+        .AllowAnyHeader();
+    });
+});
+
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -25,6 +37,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseCors("CorsPolicy");
 app.MapControllers();
 app.Run();

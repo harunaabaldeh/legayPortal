@@ -1,3 +1,4 @@
+using api.Common.Interfaces;
 using api.DTOs;
 using api.Entities;
 using api.Persistence;
@@ -9,22 +10,37 @@ namespace api.Controllers;
 
 public class JobsController : BaseController
 {
-    private readonly LegayPortalContext _context;
-    public JobsController(LegayPortalContext context)
+    private readonly LegayPortalContext _legayPortalContext;
+    private readonly ICurrentUserService _currentUserService;
+    public JobsController(LegayPortalContext legayPortalContext, ICurrentUserService currentUserService)
     {
-        _context = context;
+        _legayPortalContext = legayPortalContext;
+        _currentUserService = currentUserService;
     }
 
     [HttpGet]
-    public async Task<ActionResult> GetJobs()
+    public async Task<ActionResult> GetJobs(string keyword = null, string location = null)
     {
-        return Ok(await _context.Jobs.ToListAsync());
+        var query = _legayPortalContext.Jobs.AsQueryable();
+
+        if (!string.IsNullOrEmpty(keyword))
+        {
+            query = query.Where(job => job.Title.Contains(keyword) || job.Description.Contains(keyword));
+        }
+
+        if (!string.IsNullOrEmpty(location))
+            query = query.Where(job => job.Location.Contains(location));
+
+
+        var result = await query.ToListAsync();
+
+        return Ok(result);
     }
 
     [HttpGet("{jobId:guid}")]
     public async Task<ActionResult> GetJob(Guid jobId)
     {
-        var job = await _context.Jobs.FirstOrDefaultAsync(x => x.Id == jobId);
+        var job = await _legayPortalContext.Jobs.FirstOrDefaultAsync(x => x.Id == jobId);
 
         if (job is null) return NotFound("Job does not exit");
 
@@ -39,28 +55,33 @@ public class JobsController : BaseController
             Title = request.Title,
             Description = request.Description,
             Location = request.Location,
-            DatePosted = DateTime.UtcNow
+            Company = request.Company,
+            DatePosted = DateTime.UtcNow,
+            UserId = _currentUserService.UserId()
         };
 
-        await _context.Jobs.AddAsync(job);
+        await _legayPortalContext.Jobs.AddAsync(job);
 
-        await _context.SaveChangesAsync();
+        await _legayPortalContext.SaveChangesAsync();
 
-        return CreatedAtAction("/jobs/id", job);
+        return Ok(job);
     }
 
     [HttpPut("{jobId:guid}")]
     public async Task<ActionResult> UpdateJob(Guid jobId, JobDto request)
     {
-        var job = await _context.Jobs.FirstOrDefaultAsync(j => j.Id == jobId);
+        var job = await _legayPortalContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId);
 
         if (job is null) return NotFound("Job not found!");
+
+        if (job.UserId != _currentUserService.UserId())
+            return Unauthorized();
 
         job.Title = request.Title;
         job.Description = request.Description;
         job.Location = request.Location;
 
-        await _context.SaveChangesAsync();
+        await _legayPortalContext.SaveChangesAsync();
 
         return Ok(job);
     }
@@ -68,13 +89,16 @@ public class JobsController : BaseController
     [HttpDelete("{jobId:guid}")]
     public async Task<ActionResult> DeleteJob(Guid jobId)
     {
-        var job = _context.Jobs.FirstOrDefaultAsync(j => j.Id == jobId);
+        var job = await _legayPortalContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId);
 
         if (job is null) return NotFound("Job not found!");
 
-        _context.Remove(job);
+        if (job.UserId != _currentUserService.UserId())
+            return Unauthorized();
 
-        await _context.SaveChangesAsync();
+        _legayPortalContext.Remove(job);
+
+        await _legayPortalContext.SaveChangesAsync();
 
         return NoContent();
     }
